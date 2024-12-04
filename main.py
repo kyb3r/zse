@@ -170,8 +170,7 @@ def execute_user_command(ssh_client, args, command_str, config):
     print_status(status.output)
     stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
 
-    # essentially just allows fro real time output from terminal
-
+    # essentially just allows for real time output from terminal
     for stdout_line in iter(stdout.readline, ""):
         if stdout_line:
             sys.stdout.write(stdout_line)
