@@ -1,1 +1,2 @@
-include config.ini
+include config/config.ini
+include README.md

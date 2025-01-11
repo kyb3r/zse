@@ -15,17 +15,17 @@ class PostInstallCommand(install):
 
 setup(
     name='zse',
-    version='1.2.0',
+    version='1.2.1',
     description='A CLI tool that allows UNSW students to submit work to CSE machines.',
     long_description=long_description,
     long_description_content_type="text/markdown",
     author='Kareem Agha',
-    packages=find_packages(),
-    package_data={
-        '': ['config.ini'],
-    },
+    packages=find_packages(where='src'),
     include_package_data=True,
-    py_modules=['main'],
+    package_data={
+        'config': ['config.ini'],
+    },
+    py_modules=['src.main'],
     install_requires=[
         'paramiko',
         'colorama',
@@ -34,7 +34,7 @@ setup(
     ],
     entry_points={
         'console_scripts': [
-            'zse=main:main',
+            'zse=src.main:main',
         ],
     },
     classifiers=[

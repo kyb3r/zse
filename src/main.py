@@ -23,7 +23,7 @@ from colorama import init, Fore, Style
 REMOTE_DIR = ".zse/"
 IGNORE_DIRS = [".git"]
 IGNORE_PREFIXES = ["_", "."]
-VERSION_NO = "1.2.0"
+VERSION_NO = "1.2.1"
 CONFIG_FILE = "config.ini"
 DEFAULT_DL_DIR = "./"
 
@@ -139,27 +139,12 @@ def create_config():
     """Creates a config file if it doesn't exist, either by copying or generating one."""
     config_dir = user_config_dir("zse")
     os.makedirs(config_dir, exist_ok=True)
-    config_file_path = os.path.join(config_dir, "config.ini")
+    # config_file_path = os.path.join(config_dir, "config.ini")
+    config_file_path = os.path.join(
+        os.path.dirname(__file__), "../config/config.ini")
 
     if not os.path.exists(config_file_path):
-        config_content = """
-[server]
-address = login.cse.unsw.edu.au # no need to change
-port = 22 # no need to change
-username = z5555555 # your zID
-
-# note: dont use quotation marks around anything!
-
-[auth] # password auth
-type = password # do not change
-password =  # optional (but recommended)
-
-; [auth] # key auth
-; type = key # do not change
-; private_key_path = ~/.ssh/id_ed25519 # required for key auth
-; passphrase = # optional if you have set a passphrase
-; password = # optional if you havent created a keypair
-        """
+        config_content = open(config_file_path, "r").read()
         try:
             with open(config_file_path, 'w', encoding="utf-8") as config_file:
                 config_file.write(config_content.strip())
