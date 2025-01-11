@@ -63,6 +63,13 @@ def setup_argparse():
         description="CLI tool that allows UNSW students to submit work to CSE machines.")
     parser.add_argument("command", help="The command to execute", nargs="*")
     parser.add_argument(
+        "-s",
+        "--settings",
+        action="store_true",
+        help="Display or modify config file",
+    )
+    # currently a WIP
+    parser.add_argument(
         "-p",
         "--pipe",
         action="store_true",
@@ -109,12 +116,6 @@ def setup_argparse():
         const="./",
         type=str,
         help="Excludes folders/files from syncing (default is './' if no value is provided)"
-    )
-    parser.add_argument(
-        "-s",
-        "--settings",
-        action="store_true",
-        help="Display or modify config file",
     )
     args = parser.parse_args()
 
