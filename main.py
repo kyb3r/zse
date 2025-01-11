@@ -1,4 +1,4 @@
-"""Progam that allows file upload to UNSW CSE machines
+"""Program that allows file upload to UNSW CSE machines
     Useful for autotests and lab submissions
 """
 import os
@@ -24,6 +24,8 @@ REMOTE_DIR = ".zse/"
 IGNORE_DIRS = [".git"]
 IGNORE_PREFIXES = ["_", "."]
 VERSION_NO = "1.2.0"
+CONFIG_FILE = "config.ini"
+DEFAULT_DL_DIR = "./"
 
 
 class Error(Enum):
@@ -48,9 +50,9 @@ class Status(Enum):
 
 def main():
     """Main function for program"""
-    init()  # initialises colourama
+    init()  # initialise colourama
     args = setup_argparse()
-    check_configs()
+    check_configs(args)
     ssh_connect(args)
     sys.exit(0)
 
@@ -59,7 +61,7 @@ def setup_argparse():
     """Setups argparse to read and output the result of arguments"""
     parser = argparse.ArgumentParser(
         description="CLI tool that allows UNSW students to submit work to CSE machines.")
-    parser.add_argument("command", help="The command to execute", nargs="+")
+    parser.add_argument("command", help="The command to execute", nargs="*")
     parser.add_argument(
         "-p",
         "--pipe",
@@ -108,18 +110,28 @@ def setup_argparse():
         type=str,
         help="Excludes folders/files from syncing (default is './' if no value is provided)"
     )
+    parser.add_argument(
+        "-s",
+        "--settings",
+        action="store_true",
+        help="Display or modify config file",
+    )
     args = parser.parse_args()
 
     return args
 
 
-def check_configs():
+def check_configs(args):
     """Checks if a config file has been setup"""
     config_dir = user_config_dir("zse")
+    if args.settings:
+        print(f"Config file @ {str(user_config_dir("zse"))}")
+        sys.exit(0)
     file_name = "config.ini"
     file_path = os.path.join(config_dir, file_name)
     if not os.path.isfile(file_path):
         create_config()
+        
 
 
 def create_config():
@@ -165,7 +177,7 @@ def ssh_connect(args):
     """Sets up SSH connection"""
     config = configparser.ConfigParser(inline_comment_prefixes="#")
 
-    config_file = os.path.join(user_config_dir("zse"), "config.ini")
+    config_file = os.path.join(user_config_dir("zse"), CONFIG_FILE)
     config.read(config_file)
 
     try:
@@ -206,7 +218,7 @@ def ssh_connect(args):
     elif auth_info["type"] == "password":
         try:
             if (auth_info["password"]) == "":
-                password_var = input("What is your password: ")
+                password_var = input("Enter your password: ")
             else:
                 password_var = auth_info["password"]
 
@@ -238,7 +250,7 @@ def read_command(args, ssh_client):
     command_str = " ".join(args.command)
     try:
         if args.pipe:
-            ssh_mirror(ssh_client, args, command_str)
+            ssh_mirror(ssh_client, args, command_str)  
         else:
             execute_user_command(ssh_client, args)
     except (SSHException,
@@ -247,7 +259,7 @@ def read_command(args, ssh_client):
             subprocess.CalledProcessError,
             KeyboardInterrupt) as _:
         sys.exit(1)
-
+    
 
 def execute_user_command(ssh_client, args):
     """Executes the user's command in the remote shell (for non pipe option)"""
@@ -285,7 +297,7 @@ def execute_user_command(ssh_client, args):
     remote_dir = os.path.join(REMOTE_DIR, timestamp)
 
     if args.local:
-        run_and_donwload(sftp, remote_dir, ssh_client, args)
+        run_and_download(sftp, remote_dir, ssh_client, args)
     else:
         upload_and_run(sftp, local_dir, remote_dir, ssh_client, args)
 
@@ -317,7 +329,7 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args):
     sys.exit(0)
 
 
-def run_and_donwload(sftp, remote_dir, ssh_client, args):
+def run_and_download(sftp, remote_dir, ssh_client, args):
     """Runs remote command and downloads files from dir"""
 
     sftp.mkdir(remote_dir)
@@ -329,7 +341,7 @@ def run_and_donwload(sftp, remote_dir, ssh_client, args):
     if args.local:
         local_dir = args.local
     else:
-        local_dir = "./"
+        local_dir = DEFAULT_DL_DIR
 
     print_status(Status.OUTPUT)
     read_terminal(stdout, stderr)
@@ -405,7 +417,7 @@ def handle_file(sftp, item, remote_item_path, local_item_path, args):
 
 
 def should_ignore(path, args):
-    """Helper function to determine what files/foldes to ignore when syncing"""
+    """Helper function to determine what files/folders to ignore when syncing"""
     base_name = os.path.basename(path)
     ignored_files = IGNORE_DIRS
     if args.exclude:
@@ -421,7 +433,7 @@ def should_ignore(path, args):
 
 
 def sftp_recursive_put(sftp, local_path, remote_path, args):
-    """Recursively looks through direcotries to find files to sync"""
+    """Recursively looks through directories to find files to sync"""
     try:
         if should_ignore(local_path, args):
             if args.verbose:
@@ -545,7 +557,7 @@ def print_err_msg(errno):
 
 
 def create_status_printer():
-    """Helper function to generate satus messages"""
+    """Helper function to generate status messages"""
     counter = 0
 
     def _print_status(status_num, **kwargs):
