@@ -14,6 +14,7 @@ import socket
 import subprocess
 from platformdirs import user_config_dir
 import paramiko
+import importlib.resources as resources
 from paramiko import (
     AuthenticationException,
     SSHException,
@@ -139,12 +140,18 @@ def create_config():
     """Creates a config file if it doesn't exist, either by copying or generating one."""
     config_dir = user_config_dir("zse")
     os.makedirs(config_dir, exist_ok=True)
-    # config_file_path = os.path.join(config_dir, "config.ini")
-    config_file_path = os.path.join(
-        os.path.dirname(__file__), "../config/config.ini")
+    config_file_path = os.path.join(config_dir, "config.ini")
+    config_boil = os.path.join(os.path.dirname(
+        __file__), "..", "config", "config.ini")
+    
 
     if not os.path.exists(config_file_path):
-        config_content = open(config_file_path, "r").read()
+        try:
+            with resources.open_text('config', 'config.ini') as config_file:
+                config_content = config_file.read()
+            print(config_content)
+        except FileNotFoundError:
+            print("config.ini not found in the 'config' package.")
         try:
             with open(config_file_path, 'w', encoding="utf-8") as config_file:
                 config_file.write(config_content.strip())

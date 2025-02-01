@@ -21,10 +21,10 @@ setup(
     long_description_content_type="text/markdown",
     author='Kareem Agha',
     packages=find_packages(where='src'),
-    include_package_data=True,
     package_data={
-        'config': ['config.ini'],
+        ' ': ['config/config.ini'],
     },
+    include_package_data=True,
     py_modules=['src.main'],
     install_requires=[
         'paramiko',
