@@ -302,7 +302,7 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args):
     # may be required to display terminal colours - will work without depending
     # on bashrc config on CSE machines
     ssh_client.exec_command("export TERM=xterm-256color")
-    command = f'cd "{remote_dir}" && echo "." | {" ".join(args.command)}'
+    command = f'cd "{remote_dir}" && yes | {" ".join(args.command)}'
 
     if args.verbose:
         print(f"Running command: {command}")
