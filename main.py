@@ -23,7 +23,7 @@ from colorama import init, Fore, Style
 REMOTE_DIR = ".zse/"
 IGNORE_DIRS = [".git"]
 IGNORE_PREFIXES = ["_", "."]
-VERSION_NO = "1.2.0"
+VERSION_NO = "1.3.0"
 
 
 class Error(Enum):
@@ -296,22 +296,19 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args):
         print(f"Files will be uploaded to: {remote_dir}")
 
     sftp.mkdir(remote_dir)
-    sftp_recursive_put(sftp, local_path=local_dir,
-                       remote_path=remote_dir, args=args)
+    sftp_recursive_put(sftp, local_path=local_dir, remote_path=remote_dir, args=args)
     print_status(Status.SYNCING)
     # may be required to display terminal colours - will work without depending
     # on bashrc config on CSE machines
-    ssh_client.exec_command("export TERM=xterm-256color")
-    command = f'cd "{remote_dir}" && {" ".join(args.command)}'
-
+    command = f'export TERM=xterm-256color; cd "{remote_dir}" && {" ".join(args.command)}'
     if args.verbose:
         print(f"Running command: {command}")
 
     print_status(Status.SENT, command=" ".join(args.command))
     print_status(Status.OUTPUT)
-    _stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
+    _stdin, stdout, _stderr = ssh_client.exec_command(command, get_pty=True)
 
-    read_terminal(stdout, stderr)
+    read_terminal(stdout)
 
     ssh_client.close()
     sys.exit(0)
@@ -321,36 +318,61 @@ def run_and_donwload(sftp, remote_dir, ssh_client, args):
     """Runs remote command and downloads files from dir"""
 
     sftp.mkdir(remote_dir)
-    ssh_client.exec_command("export TERM=xterm-256color")
-    command = f'cd "{remote_dir}" && {" ".join(args.command)}'
-    print_status(Status.SENT, command=" ".join(args.command))
-    _stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
 
-    if args.local:
-        local_dir = args.local
-    else:
-        local_dir = "./"
+    command = f'export TERM=xterm-256color; cd "{remote_dir}" && {" ".join(args.command)}'
+    print_status(Status.SENT, command=" ".join(args.command))
+    _stdin, stdout, _stderr = ssh_client.exec_command(command, get_pty=True)
+
+    local_dir = args.local if args.local else "./"
 
     print_status(Status.OUTPUT)
-    read_terminal(stdout, stderr)
+    read_terminal(stdout)
     download_dir(sftp, remote_dir, local_dir, args)
 
     sys.exit(0)
 
 
-def read_terminal(stdout, stderr):
-    """Reads stdout and stderr of program in semi real time"""
-    for stdout_line in iter(stdout.readline, ""):
-        if stdout_line:
-            sys.stdout.write(stdout_line)
+def read_terminal(stdout):
+    """
+    Reads stdout/stderr in near real time.
+    Auto-replies 'yes' to confirmation/continue prompts,
+    and hides those prompts from user output.
+    """
+    chan = stdout.channel
+    buf = ""
+    prompt_re = re.compile(
+        r'Type\s*"yes"\s*to\s*(confirm|continue)', re.IGNORECASE)
+
+    while True:
+        while chan.recv_ready():
+            data = chan.recv(4096)
+            if not data:
+                break
+            text = data.decode("utf-8", "replace")
+            buf += text
+
+            m = prompt_re.search(buf)
+            if m:
+                chan.send("yes\n")
+                buf = buf[m.end():]
+                continue
+
+            sys.stdout.write(text)
             sys.stdout.flush()
 
-    for stderr_line in iter(stderr.readline, ""):
-        if stderr_line:
-            sys.stderr.write(stderr_line)
+        while chan.recv_stderr_ready():
+            data = chan.recv_stderr(4096)
+            if not data:
+                break
+            sys.stderr.write(data.decode("utf-8", "replace"))
             sys.stderr.flush()
 
-    exit_status = stdout.channel.recv_exit_status()
+        if chan.exit_status_ready() and not chan.recv_ready() and not chan.recv_stderr_ready():
+            break
+
+        time.sleep(0.05)
+
+    exit_status = chan.recv_exit_status()
     print_status(Status.END_OUTPUT)
     print_status(Status.EXIT_STAT, exit_stat=exit_status)
 
