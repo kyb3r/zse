@@ -289,7 +289,7 @@ def execute_user_command(ssh_client, args):
     else:
         upload_and_run(sftp, local_dir, remote_dir, ssh_client, args)
 
-    
+
 def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args):
     """Uploads local files and runs user command"""
     if args.verbose:
@@ -306,9 +306,9 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args):
 
     print_status(Status.SENT, command=" ".join(args.command))
     print_status(Status.OUTPUT)
-    stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
+    _stdin, stdout, _stderr = ssh_client.exec_command(command, get_pty=True)
 
-    read_terminal(stdin, stdout, stderr)
+    read_terminal(stdout)
 
     ssh_client.close()
     sys.exit(0)
@@ -321,18 +321,18 @@ def run_and_donwload(sftp, remote_dir, ssh_client, args):
 
     command = f'export TERM=xterm-256color; cd "{remote_dir}" && {" ".join(args.command)}'
     print_status(Status.SENT, command=" ".join(args.command))
-    stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
+    _stdin, stdout, _stderr = ssh_client.exec_command(command, get_pty=True)
 
     local_dir = args.local if args.local else "./"
 
     print_status(Status.OUTPUT)
-    read_terminal(stdin, stdout, stderr)
+    read_terminal(stdout)
     download_dir(sftp, remote_dir, local_dir, args)
 
     sys.exit(0)
 
 
-def read_terminal(stdin, stdout, stderr):
+def read_terminal(stdout):
     """
     Reads stdout/stderr in near real time.
     Auto-replies 'yes' to confirmation/continue prompts,
