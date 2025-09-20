@@ -295,8 +295,7 @@ def execute_user_command(ssh_client, args, s=None):
         upload_and_run(sftp, local_dir, remote_dir, ssh_client, args)
 
 
-# pylint: disable=too-many-positional-arguments
-def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, s=None):
+def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
     """Uploads local files and runs user command"""
     if args.verbose:
         print(f"Files will be uploaded to: {remote_dir}")
