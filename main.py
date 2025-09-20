@@ -298,7 +298,13 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
 
     if not args.pipe:
         ssh_client.exec_command("export TERM=xterm-256color")
-        command = f'cd "{remote_dir}" && yes | {" ".join(args.command)}'
+        give_bypassed_user_cmd = (
+            ("yes | " + " ".join(args.command))
+            if args.command[0].split()[0]
+            in ("give",)  # add more stuff to auto bypass if needed
+            else " ".join(args.command)
+        )
+        command = f'cd "{remote_dir}" && {give_bypassed_user_cmd}'
         if args.verbose:
             print(f"Running command: {command}")
         print_status(Status.SENT, command=" ".join(args.command))
@@ -424,8 +430,8 @@ def read_terminal(stdout, stderr):
     finally:
         print()
         print_status(Status.END_OUTPUT)
-        chan.send("\x03")
-        chan.send("\x04")
+        chan.send("\x03")  # Ctrl c
+        chan.send("\x04")  # Ctrl d
 
         # print("Sent CTRL-C to server")
         # Send CTRL-C to the server so we dont have infinite loop if server is in a loop.
