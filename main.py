@@ -317,7 +317,9 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
             pass
 
         ssh_client.exec_command(f"rm -rf ~/{shlex.quote(remote_dir)}")
-        # print("RAN CLEANUP COMMAND")
+        if args.verbose:
+            print(f"Cleared remote directory {remote_dir}")
+
         ssh_client.close()
         sys.exit(0)
 
@@ -398,7 +400,8 @@ def run_and_download(sftp, remote_dir, ssh_client, args):
         pass
     download_dir(sftp, remote_dir, local_dir, args)
     ssh_client.exec_command(f"rm -rf ~/{shlex.quote(remote_dir)}")
-    # print("RAN CLEANUP COMMAND")
+    if args.verbose:
+        print(f"Cleared remote directory {remote_dir}")
 
     sys.exit(0)
 
