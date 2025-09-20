@@ -67,8 +67,8 @@ def setup_argparse():
     )
     parser.add_argument("command", help="The command to execute", nargs="+")
     parser.add_argument(
-        "-p",
-        "--pipe",
+        "-i",
+        "--interactive",
         action="store_true",
         help="Uploads to a tempdir then opens a real ssh -t session:\n"
         '  ssh -t ZID@host "cd <tempdir> && <command> && bash; rm -rf <tempdir>"',
@@ -296,7 +296,7 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
     sftp_recursive_put(sftp, local_path=local_dir, remote_path=remote_dir, args=args)
     print_status(Status.SYNCING)
 
-    if not args.pipe:
+    if not args.interactive:
         ssh_client.exec_command("export TERM=xterm-256color")
         give_bypassed_user_cmd = (
             ("yes | " + " ".join(args.command))
