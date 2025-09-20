@@ -194,7 +194,7 @@ def ssh_connect(args):
                 pkey=paramiko.Ed25519Key(filename=auth_info["private_key_path"]),
                 passphrase=auth_info["passphrase"],
                 password=auth_info["password"],
-                port=server_info["port"],
+                port=int(server_info.get("port", 22)),
             )
         except (
             AuthenticationException,
@@ -216,7 +216,7 @@ def ssh_connect(args):
                 hostname=server_info["address"],
                 username=server_info["username"],
                 password=password_var,
-                port=server_info["port"],
+                port=int(server_info.get("port", 22)),
                 look_for_keys=False,
             )
         except (
