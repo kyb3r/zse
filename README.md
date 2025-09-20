@@ -34,6 +34,7 @@ To get started with `zse`, follow these steps:
 
 
 ## Task list
-- [x] Add Y/n confirmation before fetching from remote
-- [ ] Enhance pipe feature i.e. actually make it useful
-- [x] Add more to readme.md such as how to create exe and add to system path
+- [x] add y/n confirmation before fetching from remote
+- [X] enhance pipe feature i.e. actually make it useful
+- [ ] add more to readme.md such as how to create exe and add to system path
+
