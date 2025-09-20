@@ -3,8 +3,8 @@ Useful for autotests and lab submissions
 """
 
 import os
+import secrets
 import sys
-import time
 import re
 import shutil
 import argparse
@@ -14,6 +14,7 @@ import configparser
 import socket
 import subprocess
 import shlex
+import time
 from platformdirs import user_config_dir
 import paramiko
 from paramiko import (
@@ -302,8 +303,15 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
             print(f"Running command: {command}")
         print_status(Status.SENT, command=" ".join(args.command))
         print_status(Status.OUTPUT)
+
         _stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
-        read_terminal(stdout, stderr)
+        try:
+            read_terminal(stdout, stderr)
+        except KeyboardInterrupt:
+            pass
+
+        ssh_client.exec_command(f"rm -rf ~/{shlex.quote(remote_dir)}")
+        # print("RAN CLEANUP COMMAND")
         ssh_client.close()
         sys.exit(0)
 
@@ -332,8 +340,8 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
         + (
             (" && " + " ".join(args.command)) if args.command else ""
         )  # run user command
-        + " && bash ; "  # launch shell
-        + shlex.join(["rm", "-rf", remote_dir])  # delete temp dir
+        + "; bash; "  # launch shell
+        + " ".join(["rm", "-rf", "~/" + shlex.quote(remote_dir)])  # delete temp dir
     )
     # print("Remote cmd:", remote_cmd)
 
@@ -378,27 +386,52 @@ def run_and_download(sftp, remote_dir, ssh_client, args):
         local_dir = "./"
 
     print_status(Status.OUTPUT)
-    read_terminal(stdout, stderr)
+    try:
+        read_terminal(stdout, stderr)
+    except KeyboardInterrupt:
+        pass
     download_dir(sftp, remote_dir, local_dir, args)
+    ssh_client.exec_command(f"rm -rf ~/{shlex.quote(remote_dir)}")
+    # print("RAN CLEANUP COMMAND")
 
     sys.exit(0)
 
 
 def read_terminal(stdout, stderr):
-    """Reads stdout and stderr of program in semi real time"""
-    for stdout_line in iter(stdout.readline, ""):
-        if stdout_line:
-            sys.stdout.write(stdout_line)
-            sys.stdout.flush()
+    """
+    Stream stdout/stderr in (semi) real-time without blocking forever on readline().
+    Interleaves both streams and allows KeyboardInterrupt to be raised promptly.
+    """
+    chan = stdout.channel  # same channel backs both stdout/stderr
+    chan.settimeout(0.1)  # short timeout makes the loop interruptible
 
-    for stderr_line in iter(stderr.readline, ""):
-        if stderr_line:
-            sys.stderr.write(stderr_line)
-            sys.stderr.flush()
+    try:
+        while True:
+            try:
+                if chan.recv_ready():
+                    sys.stdout.buffer.write(chan.recv(4096))
+                    sys.stdout.flush()
+                if chan.recv_stderr_ready():
+                    sys.stderr.buffer.write(chan.recv_stderr(4096))
+                    sys.stderr.flush()
+            except socket.timeout:
+                pass  # just poll again
 
-    exit_status = stdout.channel.recv_exit_status()
-    print_status(Status.END_OUTPUT)
-    print_status(Status.EXIT_STAT, exit_stat=exit_status)
+            if chan.exit_status_ready():
+                break
+
+            time.sleep(0.03)  # keep CPU calm
+    finally:
+        print()
+        print_status(Status.END_OUTPUT)
+        chan.send("\x03")
+        chan.send("\x04")
+
+        # print("Sent CTRL-C to server")
+        # Send CTRL-C to the server so we dont have infinite loop if server is in a loop.
+        exit_status = chan.recv_exit_status()
+
+        print_status(Status.EXIT_STAT, exit_stat=exit_status)
 
 
 def download_dir(sftp, remote_path, local_path, args):
