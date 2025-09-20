@@ -475,22 +475,24 @@ def ssh_mirror(ssh_client, args, command_str):
     shell = ssh_client.invoke_shell()
 
     shell.send("export TERM=xterm-256color\n")
+    shell.send(command_str)
+    shell.send("\n")
 
     if not args.verbose:
-        shell.send("stty -echo\n")
-
-    shell.send(command_str + "\n")
+         shell.send("stty -echo\n")
 
     sys.stdout.write(
         Fore.GREEN
-        + 'Input "quit" or "exit" to exit out of shell.\n'
+        + 'Input "quit" or "exit" to exit the shell.\n'
         + Fore.RESET
     )
-    time.sleep(0.1)
-
-    output = shell.recv(1024).decode()
+    sys.stdout.flush()
+    time.sleep(0.5)
+    
+    output = shell.recv(4096).decode()
     print(output, end="")
-
+    shell.send("\n")
+    
     while True:
         try:
             command = input("")
@@ -498,14 +500,16 @@ def ssh_mirror(ssh_client, args, command_str):
                 break
             if command.strip().lower() in {"cls", "clear"}:
                 os.system("cls" if os.name == "nt" else "clear")
-            elif command.strip() == "":
-                pass
+            elif command == "":
+                shell.send("\n")
             else:
                 shell.send(command + "\n")
                 time.sleep(0.1)
-                if shell.recv_ready():
-                    output = shell.recv(10000).decode()
-                    print(output, end="")
+                
+            while shell.recv_ready():
+                output = shell.recv(10000).decode(errors="ignore")
+                print(output, end="")
+                sys.stdout.flush()
         except KeyboardInterrupt:
             print(Fore.RED + "\nConnection closed by user." + Style.RESET_ALL)
             ssh_client.close()
