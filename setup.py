@@ -15,7 +15,7 @@ class PostInstallCommand(install):
 
 setup(
     name='zse',
-    version='1.3.1',
+    version='1.4.0',
     description='A CLI tool that allows UNSW students to submit work to CSE machines.',
     long_description=long_description,
     long_description_content_type="text/markdown",

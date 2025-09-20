@@ -7,6 +7,8 @@ import time
 import re
 import shutil
 import argparse
+import threading
+import select
 import stat
 from enum import Enum
 import configparser
@@ -23,7 +25,7 @@ from colorama import init, Fore, Style
 REMOTE_DIR = ".zse/"
 IGNORE_DIRS = [".git"]
 IGNORE_PREFIXES = ["_", "."]
-VERSION_NO = "1.3.1"
+VERSION_NO = "1.4.0"
 
 
 class Error(Enum):
@@ -248,8 +250,8 @@ def read_command(args, ssh_client):
             KeyboardInterrupt) as _:
         sys.exit(1)
 
-
-def execute_user_command(ssh_client, args):
+# pylint: disable=too-many-arguments
+def execute_user_command(ssh_client, args, s=None):
     """Executes the user's command in the remote shell (for non pipe option)"""
     if args.clear:
         if args.verbose:
@@ -286,11 +288,14 @@ def execute_user_command(ssh_client, args):
 
     if args.local:
         run_and_donwload(sftp, remote_dir, ssh_client, args)
+    elif args.pipe:
+        upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, s=s)
+        return
     else:
         upload_and_run(sftp, local_dir, remote_dir, ssh_client, args)
 
 
-def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args):
+def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
     """Uploads local files and runs user command"""
     if args.verbose:
         print(f"Files will be uploaded to: {remote_dir}")
@@ -301,17 +306,22 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args):
     print_status(Status.SYNCING)
     # may be required to display terminal colours - will work without depending
     # on bashrc config on CSE machines
-    ssh_client.exec_command("export TERM=xterm-256color")
+    if not args.pipe:
+        ssh_client.exec_command("export TERM=xterm-256color")
     command = f'cd "{remote_dir}" && yes | {" ".join(args.command)}'
 
     if args.verbose:
         print(f"Running command: {command}")
 
-    print_status(Status.SENT, command=" ".join(args.command))
-    print_status(Status.OUTPUT)
-    _stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
+    if not args.pipe:
+        print_status(Status.SENT, command=" ".join(args.command))
+        print_status(Status.OUTPUT)
+        _stdin, stdout, stderr = ssh_client.exec_command(command, get_pty=True)
+        read_terminal(stdout, stderr)
 
-    read_terminal(stdout, stderr)
+    if args.pipe:
+        s.send(command + "\n")
+        return
 
     ssh_client.close()
     sys.exit(0)
@@ -406,7 +416,7 @@ def handle_file(sftp, item, remote_item_path, local_item_path, args):
 
 
 def should_ignore(path, args):
-    """Helper function to determine what files/foldes to ignore when syncing"""
+    """Helper function to determine what files/folders to ignore when syncing"""
     base_name = os.path.basename(path)
     ignored_files = IGNORE_DIRS
     if args.exclude:
@@ -422,7 +432,7 @@ def should_ignore(path, args):
 
 
 def sftp_recursive_put(sftp, local_path, remote_path, args):
-    """Recursively looks through direcotries to find files to sync"""
+    """Recursively looks through directories to find files to sync"""
     try:
         if should_ignore(local_path, args):
             if args.verbose:
@@ -467,49 +477,89 @@ def sftp_recursive_put(sftp, local_path, remote_path, args):
         sys.exit(0)
 
 
-# THIS IS A WIP - MAY EVENTUALLY REMOVE
-def ssh_mirror(ssh_client, args, command_str):
-    """Pipe function that acts like an ssh console
-        Currently a WIP
+def ssh_reader(shell, last_sent, lock):
     """
-    shell = ssh_client.invoke_shell()
+    Background reader for SSH shell output.
 
-    shell.send("export TERM=xterm-256color\n")
-
-    if not args.verbose:
-        shell.send("stty -echo\n")
-
-    shell.send(command_str + "\n")
-
-    sys.stdout.write(
-        Fore.GREEN
-        + 'Input "quit" or "exit" to exit out of shell.\n'
-        + Fore.RESET
-    )
-    time.sleep(0.1)
-
-    output = shell.recv(1024).decode()
-    print(output, end="")
-
+    Parameters:
+        shell: The Paramiko channel object to read output from.
+        last_sent (dict): A dictionary used to track the last line sent to the shell.
+            Expected structure: {'line': str or None}. Used for filtering echoed input.
+        lock (threading.Lock): A threading lock used to synchronize access to last_sent
+            between threads.
+    """
     while True:
         try:
-            command = input("")
-            if command.strip().lower() in {"exit", "quit"}:
+            r, _, _ = select.select([shell], [], [], 0.5)
+            if not r:
+                continue
+            data = shell.recv(4096)
+            if not data:
                 break
-            if command.strip().lower() in {"cls", "clear"}:
+            text = data.decode(errors="ignore")
+            with lock:
+                ls = last_sent["line"]
+            if ls:
+                lines = text.splitlines(True)
+                if lines and lines[0].strip() == ls.strip():
+                    lines = lines[1:]
+                    while lines and lines[0] in ("\n", "\r", "\r\n"):
+                        lines = lines[1:]
+                    text = "".join(lines)
+                    with lock:
+                        last_sent["line"] = None
+            sys.stdout.write(text)
+            sys.stdout.flush()
+        except (OSError, paramiko.SSHException):
+            break
+
+
+
+def ssh_mirror(ssh_client, args, command_str):
+    """Pipe function that acts like an ssh console"""
+    shell = ssh_client.invoke_shell(term='xterm-256color')
+    shell.set_combine_stderr(True)
+
+    last_sent = {"line": None}
+    lock = threading.Lock()
+
+    t = threading.Thread(target=ssh_reader, args=(
+        shell, last_sent, lock), daemon=True)
+    t.start()
+
+    if not args.verbose:
+        shell.send("stty echo\n")
+    if command_str:
+        with lock:
+            last_sent["line"] = command_str
+        execute_user_command(ssh_client, args, shell)
+
+    time.sleep(0.5)
+    print(Fore.GREEN + '\nInput "quit" or "exit" to exit the shell.' + Style.RESET_ALL)
+    try:
+        while True:
+            line = input("")
+            low = line.strip().lower()
+
+            if low in {"exit", "quit"}:
+                break
+            if low in {"cls", "clear"}:
                 os.system("cls" if os.name == "nt" else "clear")
-            elif command.strip() == "":
-                pass
-            else:
-                shell.send(command + "\n")
-                time.sleep(0.1)
-                if shell.recv_ready():
-                    output = shell.recv(10000).decode()
-                    print(output, end="")
-        except KeyboardInterrupt:
-            print(Fore.RED + "\nConnection closed by user." + Style.RESET_ALL)
-            ssh_client.close()
-            sys.exit(0)
+                continue
+
+            if line.strip():
+                with lock:
+                    last_sent["line"] = line
+            shell.send(line + "\n")
+    except KeyboardInterrupt:
+        print(Fore.RED + "\nConnection closed by user." + Style.RESET_ALL)
+    finally:
+        try:
+            shell.close()
+        except OSError:
+            pass
+
+
 
 
 def print_err_msg(errno):
