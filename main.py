@@ -279,7 +279,7 @@ def execute_user_command(ssh_client, args, s=None):
     sftp = ssh_client.open_sftp()
     local_dir = args.dir if args.dir else "./"
 
-    remote_dir = os.path.join(REMOTE_DIR, secrets.token_hex(8))
+    remote_dir = os.path.join(REMOTE_DIR, secrets.token_hex(4))
 
     if args.local:
         run_and_download(sftp, remote_dir, ssh_client, args)
