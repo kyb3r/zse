@@ -278,8 +278,7 @@ def execute_user_command(ssh_client, args, s=None):
     sftp = ssh_client.open_sftp()
     local_dir = args.dir if args.dir else "./"
 
-    timestamp = time.strftime("%a %d %b %Y %H-%M-%S")
-    remote_dir = os.path.join(REMOTE_DIR, timestamp)
+    remote_dir = os.path.join(REMOTE_DIR, secrets.token_hex(8))
 
     if args.local:
         run_and_donwload(sftp, remote_dir, ssh_client, args)
