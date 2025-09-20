@@ -478,7 +478,16 @@ def sftp_recursive_put(sftp, local_path, remote_path, args):
 
 
 def ssh_reader(shell, last_sent, lock):
-    """Background reader for SSH shell output"""
+    """
+    Background reader for SSH shell output.
+
+    Parameters:
+        shell: The Paramiko channel object to read output from.
+        last_sent (dict): A dictionary used to track the last line sent to the shell.
+            Expected structure: {'line': str or None}. Used for filtering echoed input.
+        lock (threading.Lock): A threading lock used to synchronize access to last_sent
+            between threads.
+    """
     while True:
         try:
             r, _, _ = select.select([shell], [], [], 0.5)
