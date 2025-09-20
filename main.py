@@ -281,7 +281,7 @@ def execute_user_command(ssh_client, args, s=None):
     remote_dir = os.path.join(REMOTE_DIR, secrets.token_hex(8))
 
     if args.local:
-        run_and_donwload(sftp, remote_dir, ssh_client, args)
+        run_and_download(sftp, remote_dir, ssh_client, args)
     else:
         upload_and_run(sftp, local_dir, remote_dir, ssh_client, args)
 
@@ -363,7 +363,7 @@ def upload_and_run(sftp, local_dir, remote_dir, ssh_client, args, *, s=None):
     sys.exit(rc)
 
 
-def run_and_donwload(sftp, remote_dir, ssh_client, args):
+def run_and_download(sftp, remote_dir, ssh_client, args):
     """Runs remote command and downloads files from dir"""
 
     sftp.mkdir(remote_dir)
