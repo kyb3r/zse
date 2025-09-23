@@ -398,7 +398,9 @@ def run_and_download(sftp, remote_dir, ssh_client, args):
         read_terminal(stdout, stderr)
     except KeyboardInterrupt:
         pass
+
     download_dir(sftp, remote_dir, local_dir, args)
+
     ssh_client.exec_command(f"rm -rf ~/{shlex.quote(remote_dir)}")
     if args.verbose:
         print(f"Cleared remote directory {remote_dir}")
@@ -430,12 +432,12 @@ def read_terminal(stdout, stderr):
                 break
 
             time.sleep(0.03)  # keep CPU calm
-    finally:
+    except KeyboardInterrupt:
         print()
-        print_status(Status.END_OUTPUT)
         chan.send("\x03")  # Ctrl c
         chan.send("\x04")  # Ctrl d
-
+    finally:
+        print_status(Status.END_OUTPUT)
         # print("Sent CTRL-C to server")
         # Send CTRL-C to the server so we dont have infinite loop if server is in a loop.
         exit_status = chan.recv_exit_status()
